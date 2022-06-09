@@ -1,0 +1,55 @@
+---
+title: "Informative Priors in Clustering"
+author: "Alex Dombowsky"
+date: '2022-06-04'
+output: pdf_document
+bibliography: resources.bib 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Rcpp)
+library(RcppArmadillo)
+library(ggplot2)
+library(reshape2)
+library(magrittr)
+library(dplyr)
+library(sdols)
+library(mcclust)
+library(mvtnorm)
+```
+# Motivation
+
+Assume that data $\boldsymbol{y} = \left\{ y_i \right\}_{i=1}^n$ are conditionally independent given $\boldsymbol{c} = \left\{ c_i\right\}_{i=1}^n$, a partition of the integers $\left\{1, \dots, n\right\}$ into $K$ disjoint groups, as well as component-specific parameters $\boldsymbol \theta = \left\{ \theta_h \right\}_{h=1}^K$. We view $\boldsymbol c$ as a random partition, assuming that it follows a prior distribution $p(\boldsymbol{c})$. Examples of possible choices of $p(\boldsymbol c)$ include a uniform prior on the space of all partitions, or exchangeable partition probability functions (EPPFs) induced by a finite mixture or a nonparametric Bayesian prior such as the Dirichlet and Pitman-Yor processes. The prior distribution $\boldsymbol p(\theta)$ is also relevant, as these component specific parameters define the characteristics of each cluster.
+
+Our focus is on creating classes of priors that can take into account different types of prior information on $\boldsymbol c$ and/or $\boldsymbol \theta$. Prior information in environmental health could take the form of an informed guess by investigators of the partition $\boldsymbol c$ of study participants, clusterings found in previous studies, covariates gathered on observations from follow-up visits, and existing groupings of chemical exposures, such as phthalates, based on their structure. Partitioning rare data could be improved by using prior information. Prior information can help lead to more scientifically meaningful clusters that reflect the goals of a study, as opposed to other clustering methods based on mathematical similarities which may conflict with already available information in the field.
+
+Data from the National Birth Defects Prevention Study (NBDPS) helps motivate our goals. The NBDPS enrolled mothers with expected delivery dates in the years 1997-2009, then monitored their children for birth defects across several follow-up visits [@yoon2001national]. Though in previous work we have clustered the birth defects themselves using a logistic regression model, another possible clustering objective is to partition mothers by their environmental exposure profiles. The nature of this study includes several possible sources of prior information, including groupings of birth defects specified by investigators, demographic and environmental exposure covariates on the mothers from a telephone interview, follow-up information on the children, and previous birth defect studies. 
+
+# Preliminary Results: the CP Process
+For the setting where we have an informed guess $\boldsymbol c_0$ of the underlying partition, we have developed Centered Partition (CP) processes, a class of priors that are shrunk towards $\boldsymbol c_0$ [@paganin2021centered]. The CP process takes the form
+\begin{equation} \label{eq:CPP}
+p(\boldsymbol c \mid \boldsymbol c_0, \psi) \propto p_0(\boldsymbol c)\exp \left\{ - \psi d(\boldsymbol c, \boldsymbol c_0) \right\}.
+\end{equation}
+Here, $d(\boldsymbol c, \boldsymbol c_0)$ denotes a measure of dissimilarity between the partitions $\boldsymbol c$ and $\boldsymbol c_0$, $\psi > 0$ is a penalization parameter for this dissimilarity, and $p_0(\boldsymbol c)$ is an EPPF. We implement the CP process using the Variation of Information distance function [@meilua2007comparing] for $d(\boldsymbol c, \boldsymbol c_0)$, though the CP process can theoretically be implemented with other partition dissimilarity measures such as Binder's loss [@binder1978bayesian]. In @paganin2021centered, we also provide guidance on how to choice $\psi$, how to implement the CP process in an MCMC algorithm, and apply this method to congenital heart defects in the NBDPS data (Figure 1).
+
+![The posterior allocation matrix for the CP process fit to the NBDPS data, where the baseline EPPF is a Dirichlet process with $\alpha = 1$, and $\psi = 80$. The axis labels are congenital heart defects. Colors on the y-axis correspond to an initial clustering $\boldsymbol c_0$ given by investigator. From @paganin2021centered.](PagFig10C){width=30%, height=30%}
+
+
+## Expansions of the CP Process
+Our guidance on choosing $\psi$ becomes significantly more difficult for increasing $n$, and future work should go into expanding our prior calibration method for larger sample sizes. We also would like to show theoretical results about the CP process and see whether theoretical guarantees from other clustering methods also apply to the CP process. Furthermore, a prior guess $\boldsymbol c_0$ may only be feasible for a subset of the observations, or we may be more confident about some cluster labels in our initial guess over others. 
+
+
+# Future Directions
+
+## Constrained Clustering
+As discussed earlier, prior guesses of the partition are only one type of prior information that could be available. A more complicated setting would be that we have pairwise information for each $1 \leq i < j \leq n$. In constrained clustering [@lu2004semi], we assume that we have a symmetric $n \times n$ matrix $\boldsymbol W$ of prior information on the observations so that, for each $(i,j)$ pair, $W_{ij}$ expresses our certainty in whether observations $i$ and $j$ should be in the same or different clusters. For clustering birth defects, this may arise by noting etiological similarities and differences between the defects. $\boldsymbol W$ is accounted for in the prior of $\boldsymbol c$, written as
+\begin{align}
+p(\boldsymbol c \mid \boldsymbol W, \boldsymbol \pi) \propto \exp \left\{ \sum_{i=1}^n \sum_{j \neq i} \textbf{1}(c_i = c_j) W_{ij} \right\} \prod_{i=1}^n \text{Cat}(c_i; 1:K, \boldsymbol \pi)
+\end{align}
+where $\text{Cat}(c_i; 1:K, \boldsymbol \pi)$ denotes the categorical distribution with $K$ categories and probabilities $\boldsymbol \pi = (\pi_1, \dots, \pi_K)$, and $h(\boldsymbol c, \boldsymbol W) = \exp \left\{ \sum_{i=1}^n \sum_{j \neq i} \textbf{1}(c_i = c_j) W_{ij} \right\}$ is a weighting function, which increases for partitions that coincide with our prior information. Constrained clustering provides several possible future directions for our aim. One possible direction leverages our already developed CP process by utilizing the weighting function $h(\boldsymbol c, \boldsymbol W)$ in a similar fashion to the clustering distance function $d(\boldsymbol c, \boldsymbol c_0)$ in (\ref{eq:CPP}). This could generalize the CP process to more nuanced prior information. A related direction is to investigate choices of $\boldsymbol W$ that could improve clustering, such as functions of additional observation-level covariates obtained at follow-up visits $\left\{ x_i \right\}_{i=1}^n$ or pairwise covariates $\left\{x_{ij}\right\}_{1 \leq i < j \leq n}$. 
+
+## Discovery of New Clusters
+There are a variety of ways to specify the prior $p(\boldsymbol \theta)$, often represented as the base distribution in a Dirichlet process or as a hierarchical model in a finite mixture. A previous study that clustered similar observations $\boldsymbol z = \left\{ z_s \right\}_{s=1}^m$ can provide information on what characteristics we can expect to see in the clusters of $\boldsymbol y$. Also, the study can provide measures of central tendency and variation within their clusters based on $\boldsymbol z$. Two questions that naturally arise from the multistudy viewpoint are (a) how can we use clusters from a previous study in our study; and (b) do we expect to discover new clusters $\boldsymbol y$ that are not in $\boldsymbol z$? We  plan to develop methods to elicit $p(\theta_h)$ with hyperparameters that lead to prior predictive samples that greatly resemble $\boldsymbol z$, and that allow new clusters to form, should they appear. If we denote $L \leq K$ to represent cluster indices shared between $\boldsymbol y$ and $\boldsymbol z$, $p(\theta_h)$ for $h > L$ can be modeled to repel from $\theta_1, \dots, \theta_L$, such as in a repulsive mixture model [@petralia2012repulsive]. We additionally hope to develop formal testing procedures to validate the new clusters under this prior under a Bayesian hypothesis testing framework, such as in @berkhof2003bayesian.
+
+# Resources
